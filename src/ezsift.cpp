@@ -35,6 +35,7 @@
 #include <iostream>
 #include <limits>
 #include <list>
+#include <omp.h>
 
 namespace ezsift {
 
@@ -105,44 +106,53 @@ int gaussian_blur(const Image<float> &in_image, Image<float> &out_image,
 int row_filter_transpose(float *src, float *dst, int w, int h, float *coef1d,
                          int gR)
 {
-    float *row_buf = new float[w + gR * 2];
+    // float *row_buf = new float[w + gR * 2];
     float *row_start;
     int elemSize = sizeof(float);
 
     float *srcData = src;
-    float *dstData = dst + w * h - 1;
+    // float *dstData = dst + w * h - 1;
+    float *dstData;
     float partialSum = 0.0f;
     float *coef = coef1d;
     float *prow;
 
     float firstData, lastData;
-    for (int r = 0; r < h; r++) {
-        row_start = srcData + r * w;
-        memcpy(row_buf + gR, row_start, elemSize * w);
-        firstData = *(row_start);
-        lastData = *(row_start + w - 1);
-        for (int i = 0; i < gR; i++) {
-            row_buf[i] = firstData;
-            row_buf[i + w + gR] = lastData;
-        }
-
-        prow = row_buf;
-        dstData = dstData - w * h + 1;
-        for (int c = 0; c < w; c++) {
-            partialSum = 0.0f;
-            coef = coef1d;
-
-            for (int i = -gR; i <= gR; i++) {
-                partialSum += (*coef++) * (*prow++);
+    #pragma omp parallel firstprivate(partialSum) \
+                     private(row_start, dstData, coef, prow, firstData, lastData)
+    {
+        float *row_buf = new float[w + gR * 2];
+        #pragma omp for schedule(auto)
+        for (int r = 0; r < h; r++) {
+            row_start = srcData + r * w;
+            // Dep: row_buf
+            memcpy(row_buf + gR, row_start, elemSize * w);
+            firstData = *(row_start);
+            lastData = *(row_start + w - 1);
+            for (int i = 0; i < gR; i++) {
+                row_buf[i] = firstData;
+                row_buf[i + w + gR] = lastData;
             }
 
-            prow -= 2 * gR;
-            *dstData = partialSum;
-            dstData += h;
+            prow = row_buf;
+            // dstData = dstData - w * h + 1;
+            dstData = dst + r;
+            for (int c = 0; c < w; c++) {
+                partialSum = 0.0f;
+                coef = coef1d;
+
+                for (int i = -gR; i <= gR; i++) {
+                    partialSum += (*coef++) * (*prow++);
+                }
+
+                prow -= 2 * gR;
+                *dstData = partialSum;
+                dstData += h;
+            }
         }
+        delete[] row_buf;
+        row_buf = nullptr;
     }
-    delete[] row_buf;
-    row_buf = nullptr;
 
     return 0;
 }
