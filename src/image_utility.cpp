@@ -21,6 +21,7 @@
 #include <cstring>
 #include <ctype.h>
 #include <limits>
+#include <omp.h>
 
 namespace ezsift {
 
@@ -394,9 +395,16 @@ int match_keypoints(std::list<SiftKeypoint> &kpt_list1,
 {
     std::list<SiftKeypoint>::iterator kpt1;
     std::list<SiftKeypoint>::iterator kpt2;
+    int list1_size = kpt_list1.size();
+    // match_list.resize(list1_size);
 
-    for (kpt1 = kpt_list1.begin(); kpt1 != kpt_list1.end(); kpt1++) {
+    // for (kpt1 = kpt_list1.begin(); kpt1 != kpt_list1.end(); kpt1++) {
+    #pragma omp declare reduction (merge: std::list<MatchPair>: omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
+    #pragma omp parallel for private(kpt1, kpt2) reduction(merge: match_list)
+    for (int i = 0; i < list1_size; i++) {
         // Position of the matched feature.
+        kpt1 = kpt_list1.begin();
+        std::advance(kpt1, i);
         int r1 = (int)kpt1->r;
         int c1 = (int)kpt1->c;
 
