@@ -32,6 +32,24 @@ include_directories(
 
 target_include_directories(${EZSIFT} PUBLIC ${EZSIFT_SRC_DIR})
 
+find_package(OpenMP)
+if (OPENMP_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
+
+
 if(EZSIFT_BUILD_EXAMPLES)
   add_subdirectory(${EZSIFT_ROOT}/examples ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples/)
 endif()
+
+OPTION(DEFINE_DEBUG
+  "Build the project using debugging code"
+  OFF)
+IF(DEFINE_DEBUG)
+  MESSAGE("Adding Debug flag...")
+  ADD_DEFINITIONS(-DDEBUG)
+  SET(CMAKE_BUILD_TYPE Debug)
+  MESSAGE("Build type is " ${CMAKE_BUILD_TYPE})
+ENDIF(DEFINE_DEBUG)
