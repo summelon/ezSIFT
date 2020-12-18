@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
             << std::endl;
         return -1;
     }
-    char file1[255];
+    char file1[128];
     memcpy(file1, argv[1], sizeof(char) * strlen(argv[1]));
     file1[strlen(argv[1])] = 0;
 #endif

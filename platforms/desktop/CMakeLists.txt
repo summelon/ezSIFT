@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.9)
 
 set(EZSIFT ezsift)
-project(${EZSIFT})
+project(${EZSIFT} CXX CUDA)
 
 option(EZSIFT_BUILD_EXAMPLES "Build with examples" ON)
 
@@ -19,7 +19,7 @@ set(EZSIFT_ROOT ${PROJECT_SOURCE_DIR}/../../)
 set(EZSIFT_INCLUDE_DIR ${EZSIFT_ROOT}/include)
 set(EZSIFT_SRC_DIR ${EZSIFT_ROOT}/src)
 
-file(GLOB_RECURSE SRC RELATIVE ${PROJECT_SOURCE_DIR} "${EZSIFT_SRC_DIR}/*.cpp")
+file(GLOB_RECURSE SRC RELATIVE ${PROJECT_SOURCE_DIR} "${EZSIFT_SRC_DIR}/*.cpp" "${EZSIFT_SRC_DIR}/*.cu")
 file(GLOB_RECURSE HEADERS RELATIVE ${PROJECT_SOURCE_DIR} "${EZSIFT_SRC_DIR}/*.h" "${EZSIFT_INCLUDE_DIR}/*.h")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
@@ -38,7 +38,6 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
-
 
 if(EZSIFT_BUILD_EXAMPLES)
   add_subdirectory(${EZSIFT_ROOT}/examples ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples/)
