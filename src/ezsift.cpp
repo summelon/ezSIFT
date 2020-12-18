@@ -28,6 +28,7 @@
 #include "image.h"
 #include "timer.h"
 #include "vvector.h"
+#include "kernel.h"
 
 #include <cmath>
 #include <cstdio>
@@ -95,8 +96,10 @@ int gaussian_blur(const Image<float> &in_image, Image<float> &out_image,
     int gR = static_cast<int>(coef1d.size()) / 2;
 
     Image<float> img_t(h, w);
-    row_filter_transpose(in_image.data, img_t.data, w, h, &coef1d[0], gR);
-    row_filter_transpose(img_t.data, out_image.data, h, w, &coef1d[0], gR);
+    // row_filter_transpose(in_image.data, img_t.data, w, h, &coef1d[0], gR);
+    // row_filter_transpose(img_t.data, out_image.data, h, w, &coef1d[0], gR);
+    row_filter_transpose_gpu(in_image.data, img_t.data, w, h, &coef1d[0], gR);
+    row_filter_transpose_gpu(img_t.data, out_image.data, h, w, &coef1d[0], gR);
 
     return 0;
 }
