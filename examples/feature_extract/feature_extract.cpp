@@ -12,23 +12,36 @@
 
 #include <iostream>
 #include <list>
+#include <omp.h>
 
 #define USE_FIX_FILENAME 0
 int main(int argc, char *argv[])
 {
 
+    int num_threads = omp_get_max_threads();
+    printf("--- Max thread is %d ---\n", num_threads);
 #if USE_FIX_FILENAME
     char *file1 = "img1.pgm";
+    printf("--- Using max threads ---\n");
 #else
-    if (argc != 2) {
+    if (argc != 3) {
         std::cerr
             << "Please input an input image name.\nUsage: feature_extract img"
             << std::endl;
         return -1;
     }
-    char file1[255];
+    char file1[128];
     memcpy(file1, argv[1], sizeof(char) * strlen(argv[1]));
     file1[strlen(argv[1])] = 0;
+    // Read thread number
+    int run_threads = 1;
+    run_threads = atoi(argv[2]);
+    if (run_threads < 1)
+        run_threads = 1;
+    else
+        run_threads = (num_threads > run_threads) ? run_threads : num_threads;
+    printf("--- Now using %d threads ---\n\n", run_threads);
+    omp_set_num_threads(run_threads);
 #endif
 
     ezsift::Image<unsigned char> image;

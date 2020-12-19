@@ -13,15 +13,19 @@
 
 #include <iostream>
 #include <list>
+#include <omp.h>
 
 #define USE_FIX_FILENAME 0
 int main(int argc, char *argv[])
 {
+    int num_threads = omp_get_max_threads();
+    printf("--- Max thread is %d ---\n", num_threads);
 #if USE_FIX_FILENAME
     char *file1 = "img1.pgm";
     char *file2 = "img2.pgm";
+    printf("--- Using max threads ---\n");
 #else
-    if (argc != 3) {
+    if (argc != 4) {
         printf("Please input two image filenames.\n");
         printf("usage: image_match img1 img2\n");
         return -1;
@@ -32,6 +36,15 @@ int main(int argc, char *argv[])
     file1[strlen(argv[1])] = 0;
     memcpy(file2, argv[2], sizeof(char) * strlen(argv[2]));
     file2[strlen(argv[2])] = 0;
+    // Read thread number
+    int run_threads = 1;
+    run_threads = atoi(argv[3]);
+    if (run_threads < 1)
+        run_threads = 1;
+    else
+        run_threads = (num_threads > run_threads) ? run_threads : num_threads;
+    printf("--- Now using %d threads ---\n\n", run_threads);
+    omp_set_num_threads(run_threads);
 #endif
 
     // Read two input images
