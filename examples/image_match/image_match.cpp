@@ -10,6 +10,7 @@
 */
 
 #include "ezsift.h"
+#include "kernel.h"
 
 #include <iostream>
 #include <list>
@@ -76,7 +77,8 @@ int main(int argc, char *argv[])
 
     // Match keypoints.
     std::list<ezsift::MatchPair> match_list;
-    ezsift::match_keypoints(kpt_list1, kpt_list2, match_list);
+    // ezsift::match_keypoints(kpt_list1, kpt_list2, match_list);
+    match_keypoints_gpu(kpt_list1, kpt_list2, match_list);
 
     // Draw result image.
     ezsift::draw_match_lines_to_ppm_file("sift_matching_a_b.ppm", image1,
