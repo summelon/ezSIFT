@@ -22,6 +22,7 @@
 #include <ctype.h>
 #include <limits>
 #include <omp.h>
+#include <immintrin.h>
 
 namespace ezsift {
 
@@ -396,59 +397,86 @@ int match_keypoints(std::list<SiftKeypoint> &kpt_list1,
     std::list<SiftKeypoint>::iterator kpt1;
     std::list<SiftKeypoint>::iterator kpt2;
     int list1_size = kpt_list1.size();
-    // match_list.resize(list1_size);
 
+    // match_list.resize(list1_size);
     // for (kpt1 = kpt_list1.begin(); kpt1 != kpt_list1.end(); kpt1++) {
     #pragma omp declare reduction (merge: std::list<MatchPair>: omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
-    #pragma omp parallel for private(kpt1, kpt2) reduction(merge: match_list)
-    for (int i = 0; i < list1_size; i++) {
-        // Position of the matched feature.
-        kpt1 = kpt_list1.begin();
-        std::advance(kpt1, i);
-        int r1 = (int)kpt1->r;
-        int c1 = (int)kpt1->c;
+    #pragma omp parallel
+    {
+        // SIMD
+	    float* d1_ali;
+        posix_memalign ((void **)&d1_ali, 32, DEGREE_OF_DESCRIPTORS * sizeof(float));
+        float* d2_ali;
+        posix_memalign ((void **)&d2_ali, 32, DEGREE_OF_DESCRIPTORS * sizeof(float));
+        #pragma omp for private(kpt1, kpt2) reduction(merge: match_list)
+        for (int i = 0; i < list1_size; i++) {
+            // Position of the matched feature.
+            kpt1 = kpt_list1.begin();
+            std::advance(kpt1, i);
+            int r1 = (int)kpt1->r;
+            int c1 = (int)kpt1->c;
 
-        float *descr1 = kpt1->descriptors;
-        float score1 = (std::numeric_limits<float>::max)(); // highest score
-        float score2 = (std::numeric_limits<float>::max)(); // 2nd highest score
+            float *descr1 = kpt1->descriptors;
+            memcpy(d1_ali, descr1, DEGREE_OF_DESCRIPTORS * sizeof(float));
+            float score1 = (std::numeric_limits<float>::max)(); // highest score
+            float score2 = (std::numeric_limits<float>::max)(); // 2nd highest score
 
-        // Position of the matched feature.
-        int r2 = 0, c2 = 0;
-        for (kpt2 = kpt_list2.begin(); kpt2 != kpt_list2.end(); kpt2++) {
-            float score = 0;
-            float *descr2 = kpt2->descriptors;
-            float dif;
-            for (int i = 0; i < DEGREE_OF_DESCRIPTORS; i++) {
-                dif = descr1[i] - descr2[i];
-                score += dif * dif;
+            // Position of the matched feature.
+            int r2 = 0, c2 = 0;
+            for (kpt2 = kpt_list2.begin(); kpt2 != kpt_list2.end(); kpt2++) {
+                float score = 0;
+                float *descr2 = kpt2->descriptors;
+                memcpy(d2_ali, descr2, DEGREE_OF_DESCRIPTORS * sizeof(float));
+
+                float dif;
+                // for (int i = 0; i < DEGREE_OF_DESCRIPTORS; i++) {
+                //     dif = descr1[i] - descr2[i];
+                //     score += dif * dif;
+                // }
+                __m256 tmp_score=_mm256_set1_ps(0);
+                for (int i = 0; i < DEGREE_OF_DESCRIPTORS; i+=8)
+                {
+                    const __m256 d1 = _mm256_load_ps(d1_ali+i);
+                    const __m256 d2 = _mm256_load_ps(d2_ali+i);
+
+                    const __m256 s1 = _mm256_sub_ps(d1,d2);
+                    const __m256 s2 = _mm256_mul_ps(s1,s1);
+                    tmp_score = _mm256_add_ps(tmp_score, s2);
+	            }
+                const __m128 x128 = _mm_add_ps(_mm256_extractf128_ps(tmp_score, 1), _mm256_castps256_ps128(tmp_score));
+                /* ( -, -, x1+x3+x5+x7, x0+x2+x4+x6 ) */
+                const __m128 x64 = _mm_add_ps(x128, _mm_movehl_ps(x128, x128));
+                score = _mm_cvtss_f32(_mm_add_ss(x64, _mm_shuffle_ps(x64, x64, 0x55)));
+
+
+
+                if (score < score1) {
+                    score2 = score1;
+                    score1 = score;
+                    r2 = (int)kpt2->r;
+                    c2 = (int)kpt2->c;
+                }
+                else if (score < score2) {
+                    score2 = score;
+                }
             }
 
-            if (score < score1) {
-                score2 = score1;
-                score1 = score;
-                r2 = (int)kpt2->r;
-                c2 = (int)kpt2->c;
-            }
-            else if (score < score2) {
-                score2 = score;
-            }
-        }
+            #if (USE_FAST_FUNC == 1)
+            if (fast_sqrt_f(score1 / score2) < SIFT_MATCH_NNDR_THR)
+            #else
+            if (sqrtf(score1 / score2) < SIFT_MATCH_NNDR_THR)
+            #endif
+            {
+                MatchPair mp;
+                mp.r1 = r1;
+                mp.c1 = c1;
+                mp.r2 = r2;
+                mp.c2 = c2;
 
-#if (USE_FAST_FUNC == 1)
-        if (fast_sqrt_f(score1 / score2) < SIFT_MATCH_NNDR_THR)
-#else
-        if (sqrtf(score1 / score2) < SIFT_MATCH_NNDR_THR)
-#endif
-        {
-            MatchPair mp;
-            mp.r1 = r1;
-            mp.c1 = c1;
-            mp.r2 = r2;
-            mp.c2 = c2;
-
-            match_list.push_back(mp);
-        }
-    }
+                match_list.push_back(mp);
+            }
+        } // End of parallel for
+    } // End of openmp parallel
 
     match_list.unique(same_match_pair);
 
