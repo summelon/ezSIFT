@@ -21,7 +21,7 @@ set(EZSIFT_SRC_DIR ${EZSIFT_ROOT}/src)
 
 file(GLOB_RECURSE SRC RELATIVE ${PROJECT_SOURCE_DIR} "${EZSIFT_SRC_DIR}/*.cpp")
 file(GLOB_RECURSE HEADERS RELATIVE ${PROJECT_SOURCE_DIR} "${EZSIFT_SRC_DIR}/*.h" "${EZSIFT_INCLUDE_DIR}/*.h")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -mavx2 -g")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
 add_library(${EZSIFT} ${SRC})
 set_property(TARGET ${EZSIFT} PROPERTY POSITION_INDEPENDENT_CODE ON)
@@ -31,6 +31,10 @@ include_directories(
 )
 
 target_include_directories(${EZSIFT} PUBLIC ${EZSIFT_SRC_DIR})
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES “BCM28|armv7”)
+    add_compile_options(-march=armv8-a+crc -mcpu=cortex-a53 -mfpu=neon-fp-armv8)
+endif()
 
 find_package(OpenMP)
 if (OPENMP_FOUND)

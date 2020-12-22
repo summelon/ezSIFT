@@ -22,7 +22,7 @@
 #include <ctype.h>
 #include <limits>
 #include <omp.h>
-#include <immintrin.h>
+#include <arm_neon.h>
 
 namespace ezsift {
 
@@ -403,11 +403,7 @@ int match_keypoints(std::list<SiftKeypoint> &kpt_list1,
     #pragma omp declare reduction (merge: std::list<MatchPair>: omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
     #pragma omp parallel
     {
-        // SIMD
-	    float* d1_ali;
-        posix_memalign ((void **)&d1_ali, 32, DEGREE_OF_DESCRIPTORS * sizeof(float));
-        float* d2_ali;
-        posix_memalign ((void **)&d2_ali, 32, DEGREE_OF_DESCRIPTORS * sizeof(float));
+        float32_t *mulResult = (float32_t*)malloc(4*sizeof(float32_t));
         #pragma omp for private(kpt1, kpt2) reduction(merge: match_list)
         for (int i = 0; i < list1_size; i++) {
             // Position of the matched feature.
@@ -417,7 +413,6 @@ int match_keypoints(std::list<SiftKeypoint> &kpt_list1,
             int c1 = (int)kpt1->c;
 
             float *descr1 = kpt1->descriptors;
-            memcpy(d1_ali, descr1, DEGREE_OF_DESCRIPTORS * sizeof(float));
             float score1 = (std::numeric_limits<float>::max)(); // highest score
             float score2 = (std::numeric_limits<float>::max)(); // 2nd highest score
 
@@ -426,29 +421,22 @@ int match_keypoints(std::list<SiftKeypoint> &kpt_list1,
             for (kpt2 = kpt_list2.begin(); kpt2 != kpt_list2.end(); kpt2++) {
                 float score = 0;
                 float *descr2 = kpt2->descriptors;
-                memcpy(d2_ali, descr2, DEGREE_OF_DESCRIPTORS * sizeof(float));
 
-                float dif;
+                float32x4_t tmp_s = vdupq_n_f32(0.f);
+                // float dif;
+                for (int i = 0; i < DEGREE_OF_DESCRIPTORS; i+=4)
+                {
+                    float32x4_t d1 = vld1q_f32(descr1+i);
+                    float32x4_t d2 = vld1q_f32(descr2+i);
+                    float32x4_t s1 = vsubq_f32(d1,d2);
+                    tmp_s = vaddq_f32(tmp_s, vmulq_f32(s1,s1));
+                }
                 // for (int i = 0; i < DEGREE_OF_DESCRIPTORS; i++) {
                 //     dif = descr1[i] - descr2[i];
                 //     score += dif * dif;
                 // }
-                __m256 tmp_score=_mm256_set1_ps(0);
-                for (int i = 0; i < DEGREE_OF_DESCRIPTORS; i+=8)
-                {
-                    const __m256 d1 = _mm256_load_ps(d1_ali+i);
-                    const __m256 d2 = _mm256_load_ps(d2_ali+i);
-
-                    const __m256 s1 = _mm256_sub_ps(d1,d2);
-                    const __m256 s2 = _mm256_mul_ps(s1,s1);
-                    tmp_score = _mm256_add_ps(tmp_score, s2);
-	            }
-                const __m128 x128 = _mm_add_ps(_mm256_extractf128_ps(tmp_score, 1), _mm256_castps256_ps128(tmp_score));
-                /* ( -, -, x1+x3+x5+x7, x0+x2+x4+x6 ) */
-                const __m128 x64 = _mm_add_ps(x128, _mm_movehl_ps(x128, x128));
-                score = _mm_cvtss_f32(_mm_add_ss(x64, _mm_shuffle_ps(x64, x64, 0x55)));
-
-
+                vst1q_f32(mulResult,tmp_s);
+                score = mulResult[0]+mulResult[1]+mulResult[2]+mulResult[3];
 
                 if (score < score1) {
                     score2 = score1;
@@ -476,6 +464,7 @@ int match_keypoints(std::list<SiftKeypoint> &kpt_list1,
                 match_list.push_back(mp);
             }
         } // End of parallel for
+        free(mulResult);
     } // End of openmp parallel
 
     match_list.unique(same_match_pair);
