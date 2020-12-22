@@ -100,7 +100,7 @@ int gaussian_blur(const Image<float> &in_image, Image<float> &out_image,
     // row_filter_transpose(img_t.data, out_image.data, h, w, &coef1d[0], gR);
     // row_filter_transpose_gpu(in_image.data, img_t.data, w, h, &coef1d[0], gR);
     // row_filter_transpose_gpu(img_t.data, out_image.data, h, w, &coef1d[0], gR);
-    row_filter_transpose_gpu(in_image.data, out_image.data, w, h, &coef1d[0], gR);
+    row_filter_transpose_gpu_opt(in_image.data, out_image.data, w, h, &coef1d[0], gR);
 
     return 0;
 }

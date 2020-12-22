@@ -161,15 +161,15 @@ void row_filter_transpose_gpu_opt(
     // printf("Adaptive width: %d, height: %d\n\n\n", adap_width, adap_height);
 
     int img_size = adap_width * adap_height;
-    float *padded_src = new float[img_size];
-    float *padded_dst = new float[img_size];
+    float *padded_src = (float *)malloc(img_size*sizeof(float));
+    float *padded_dst = (float *)malloc(img_size*sizeof(float));
 
-    // Fill padded part with zero
-    memset(padded_src, 0, img_size);
+    // for (int i = 0; i < img_size; i++)
+    //     padded_src[i] = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 255;
+    memset(padded_src, 0.f, img_size*sizeof(float));
+
     for (int i = 0; i < h; i++)
-    {
         memcpy(padded_src+adap_width*i, host_src+w*i, w*sizeof(float));
-    }
 
     // Allocate and copy to device memory
     float *dev_src, *dev_dst, *dev_swap;
@@ -195,8 +195,7 @@ void row_filter_transpose_gpu_opt(
 
     // Clean
     cudaFree(dev_src); cudaFree(dev_dst); cudaFree(dev_swap);
-    delete [] padded_src;
-    delete [] padded_dst;
+    free(padded_src); free(padded_dst);
 }
 
 
