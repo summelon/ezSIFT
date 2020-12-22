@@ -2,6 +2,7 @@
 #include "common.h"
 #include "image.h"
 #include "ezsift.h"
+#include "convolutionSeparable_common.h"
 
 #include <list>
 #include <cuda.h>
@@ -118,10 +119,10 @@ void row_filter_transpose_gpu(
     checkCuda( cudaMalloc( (void**)&dev_in_buf, sizeof(float)*in_buf_size) );
     checkCuda( cudaMalloc( (void**)&dev_out_buf, sizeof(float)*out_buf_size) );
     // Coef array
-    checkCuda( cudaMalloc( (void**)&dev_coef, sizeof(float)*2*gR ) );
+    checkCuda( cudaMalloc( (void**)&dev_coef, sizeof(float)*(2*gR+1) ) );
 
     checkCuda( cudaMemcpy(dev_src, host_src, sizeof(float)*img_size, cudaMemcpyHostToDevice) );
-    checkCuda( cudaMemcpy(dev_coef, coef1d, sizeof(float)*2*gR, cudaMemcpyHostToDevice) );
+    checkCuda( cudaMemcpy(dev_coef, coef1d, sizeof(float)*(2*gR+1), cudaMemcpyHostToDevice) );
 
     // Set block and grid size
     int dimBlock, dimGrid;
@@ -142,6 +143,60 @@ void row_filter_transpose_gpu(
     cudaFree(dev_src); cudaFree(dev_dst); cudaFree(dev_swap);
     cudaFree(dev_in_buf); cudaFree(dev_out_buf);
     cudaFree(dev_coef);
+}
+
+
+void row_filter_transpose_gpu_opt(
+        float *host_src, float *host_dst,
+        int w, int h, float *coef1d, int gR)
+{
+    int row_common_factor = ROWS_RESULT_STEPS * ROWS_BLOCKDIM_X;
+    int column_common_factor = COLUMNS_RESULT_STEPS * COLUMNS_BLOCKDIM_Y;
+    int w_reminder = w % row_common_factor;
+    int h_reminder = h % column_common_factor;
+    // Adaptive width & height for image padding
+    int adap_width = (w_reminder) ? ( (w / row_common_factor + 1) * row_common_factor ) : w;
+    int adap_height = (h_reminder) ? ( (h / column_common_factor + 1) * column_common_factor ) : h;
+    // printf("Original width: %d, height: %d\n", w, h);
+    // printf("Adaptive width: %d, height: %d\n\n\n", adap_width, adap_height);
+
+    int img_size = adap_width * adap_height;
+    float *padded_src = new float[img_size];
+    float *padded_dst = new float[img_size];
+
+    // Fill padded part with zero
+    memset(padded_src, 0, img_size);
+    for (int i = 0; i < h; i++)
+    {
+        memcpy(padded_src+adap_width*i, host_src+w*i, w*sizeof(float));
+    }
+
+    // Allocate and copy to device memory
+    float *dev_src, *dev_dst, *dev_swap;
+    // Copy kernel to constant memory
+    setConvolutionKernel(coef1d, gR);
+
+    // Image
+    checkCuda( cudaMalloc( (void**)&dev_src, sizeof(float)*img_size ) );
+    checkCuda( cudaMalloc( (void**)&dev_dst, sizeof(float)*img_size ) );
+    checkCuda( cudaMalloc( (void**)&dev_swap, sizeof(float)*img_size ) );
+
+    checkCuda( cudaMemcpy(dev_src, padded_src, sizeof(float)*img_size, cudaMemcpyHostToDevice) );
+
+    convolutionRowsGPU(dev_swap, dev_src, adap_width, adap_height, gR);
+    convolutionColumnsGPU(dev_dst, dev_swap, adap_width, adap_height, gR);
+
+    // Transfer from device mem to host
+    checkCuda( cudaMemcpy(padded_dst, dev_dst, sizeof(float)*img_size, cudaMemcpyDeviceToHost) );
+    for (int i = 0; i < h; i++)
+    {
+        memcpy(host_dst+w*i, padded_dst+adap_width*i, w*sizeof(float));
+    }
+
+    // Clean
+    cudaFree(dev_src); cudaFree(dev_dst); cudaFree(dev_swap);
+    delete [] padded_src;
+    delete [] padded_dst;
 }
 
 

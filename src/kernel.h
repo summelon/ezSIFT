@@ -10,6 +10,10 @@ void row_filter_transpose_gpu(
         float *src, float *dst, int w, int h,
         float *coef1d, int gR);
 
+void row_filter_transpose_gpu_opt(
+        float *src, float *dst, int w, int h,
+        float *coef1d, int gR);
+
 
 void match_keypoints_gpu(std::list<ezsift::SiftKeypoint> &kpt_list1,
                          std::list<ezsift::SiftKeypoint> &kpt_list2,
