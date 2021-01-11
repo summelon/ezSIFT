@@ -20,7 +20,9 @@ cd build
 cmake ..
 make
 ```
-Then you can find the built binary under `build/bin` directory. Run the two demos like this:
+Then you can find the built binary under `build/bin` directory.  
+__Remember to rebuild after each checkout!!__
+
 #### OpenMP + SIMD(AVX2)
 ```bash
 git checkout c6bc9b7
